@@ -1,3 +1,6 @@
+#ifndef _COMMON_H_
+#define _COMMON_H_
+
 //####### COMMON FUNCTIONS #########
 
 #define AVAILABLE    0
@@ -16,16 +19,17 @@ uint8_t getChannelCount(struct bind_data *bd);
 void packChannels(uint8_t config, volatile uint16_t PPM[], uint8_t *p);
 void unpackChannels(uint8_t config, volatile uint16_t PPM[], uint8_t *p);
 
+uint32_t delayInMs(uint16_t d);
+uint32_t delayInMsLong(uint8_t d);
+
 void scannerMode(void);
 void printVersion(uint16_t v);
 void fatalBlink(uint8_t blinks);
 
 void RFM22B_Int(void);
 void init_rfm(uint8_t isbind);
+void tx_reset(void);
 void rx_reset(void);
-void to_rx_mode(void);
-void to_tx_mode(void);
-void to_sleep_mode(void);
 void setHopChannel(uint8_t ch);
 
 uint8_t tx_done(void);
@@ -40,7 +44,6 @@ const static uint8_t pktsizes[8] = { 0, 7, 11, 12, 16, 17, 21, 0 };
 
 void RFM22B_Int()
 {
-  rfmSetReadyMode();
   if (RF_Mode == TRANSMIT) {
     RF_Mode = TRANSMITTED;
   } else if (RF_Mode == RECEIVE) {
@@ -62,8 +65,8 @@ uint8_t getChannelCount(struct bind_data *bd)
 uint32_t getInterval(struct bind_data *bd)
 {
   uint32_t ret;
-  // Sending a x byte packet on bps y takes about (emperical)
-  // usec = (x + 15) * 8200000 / baudrate
+  // Sending an 'x' byte packet at 'y' bps takes approx. (emperical):
+  // usec = (x + 15 {20 w/ diversity}) * 8200000 / bps
 #define BYTES_AT_BAUD_TO_USEC(bytes, bps, div) ((uint32_t)((bytes) + (div?20:15)) * 8200000L / (uint32_t)(bps))
 
   ret = (BYTES_AT_BAUD_TO_USEC(getPacketSize(bd), modem_params[bd->modem_params].bps, bd->flags&DIVERSITY_ENABLED) + 2000);
@@ -184,6 +187,36 @@ uint8_t countSetBits(uint16_t x)
   return (x * 0x0101) >> 8;
 }
 
+// non linear mapping
+// 0 - 0
+// 1-99    - 100ms - 9900ms (100ms res)
+// 100-189 - 10s  - 99s   (1s res)
+// 190-209 - 100s - 290s (10s res)
+// 210-255 - 5m - 50m (1m res)
+uint32_t delayInMs(uint16_t d)
+{
+  uint32_t ms;
+  if (d < 100) {
+    ms = d;
+  } else if (d < 190) {
+    ms = (d - 90) * 10UL;
+  } else if (d < 210) {
+    ms = (d - 180) * 100UL;
+  } else {
+    ms = (d - 205) * 600UL;
+  }
+  return ms * 100UL;
+}
+
+// non linear mapping
+// 0-89    - 10s - 99s
+// 90-109  - 100s - 290s (10s res)
+// 110-255 - 5m - 150m (1m res)
+uint32_t delayInMsLong(uint8_t d)
+{
+  return delayInMs((uint16_t)d + 100);
+}
+
 void init_rfm(uint8_t isbind)
 {
   #ifdef SDN_pin
@@ -192,7 +225,8 @@ void init_rfm(uint8_t isbind)
   digitalWrite(SDN_pin, 0);
   delay(50);
   #endif
-  rfmSetReadyMode();
+  rfmSetReadyMode(); // turn on the XTAL and give it time to settle
+  delayMicroseconds(600);
   rfmClearIntStatus();
   rfmInit(bind_data.flags&DIVERSITY_ENABLED);
   rfmSetStepSize(bind_data.rf_channel_spacing);
@@ -214,18 +248,11 @@ void init_rfm(uint8_t isbind)
   }
 }
 
-void to_tx_mode(void)
+void tx_reset(void)
 {
   tx_start = micros();
   RF_Mode = TRANSMIT;
   rfmSetTX();
-  delay(1); // allow for PLL ramp-up, ~850us
-}
-
-void to_rx_mode(void)
-{
-  rfmClearIntStatus();
-  rx_reset();
 }
 
 void rx_reset(void)
@@ -257,7 +284,7 @@ void tx_packet_async(uint8_t* pkt, uint8_t size)
 {
   rfmSendPacket(pkt, size);
   rfmClearIntStatus();
-  to_tx_mode();
+  tx_reset();
 }
 
 void tx_packet(uint8_t* pkt, uint8_t size)
@@ -281,11 +308,9 @@ uint8_t tx_done()
     Serial.print("TX took:");
     Serial.println(micros() - tx_start);
     #endif
-    rfmSetReadyMode();
     RF_Mode = AVAILABLE;
     return 1; // success
   } else if ((RF_Mode == TRANSMIT) && ((micros() - tx_start) > 100000)) {
-    rfmSetReadyMode();
     RF_Mode = AVAILABLE;
     return 2; // timeout
   }
@@ -304,7 +329,7 @@ void scannerMode(void)
   uint8_t rssiMin = 0, rssiMax = 0;
   uint32_t rssiSum = 0;
   Serial.println("scanner mode");
-  to_rx_mode();
+  rx_reset();
 
   while (startFreq != 1000) { // if startFreq == 1000, break (used to exit scannerMode)
     while (Serial.available()) {
@@ -450,3 +475,5 @@ void fatalBlink(uint8_t blinks)
     delay(300);
   }
 }
+
+#endif

@@ -1,3 +1,6 @@
+#ifndef _HARDWARE_H_
+#define _HARDWARE_H_
+
 // Generic definitions needed always
 
 #define RX_FLYTRON8CH 0x01
