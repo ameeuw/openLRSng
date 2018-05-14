@@ -72,7 +72,7 @@ uint32_t getInterval(struct bind_data *bd)
   ret = (BYTES_AT_BAUD_TO_USEC(getPacketSize(bd), modem_params[bd->modem_params].bps, bd->flags&DIVERSITY_ENABLED) + 2000);
 
   if (bd->flags & TELEMETRY_MASK) {
-    ret += (BYTES_AT_BAUD_TO_USEC(TELEMETRY_PACKETSIZE, modem_params[bd->modem_params].bps, bd->flags&DIVERSITY_ENABLED) + 2000);
+    ret += (BYTES_AT_BAUD_TO_USEC(TELEMETRY_PACKETSIZE, modem_params[bd->modem_params].bps, bd->flags&DIVERSITY_ENABLED) + 1000);
   }
 
   // round up to ms
@@ -277,6 +277,8 @@ void check_module(void)
 
 void setHopChannel(uint8_t ch)
 {
+  uint8_t magicLSB = (bind_data.rf_magic & 0xFF) ^ ch;
+  rfmSetHeader(3, magicLSB);
   rfmSetChannel(bind_data.hopchannel[ch]);
 }
 
