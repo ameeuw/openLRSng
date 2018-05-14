@@ -60,6 +60,8 @@
 //#define BOARD_TYPE 8 // openLRSng microRx
 //#define BOARD_TYPE 9 // BroversityRX
 #define BOARD_TYPE 10 // DIY mini receiver
+//#define BOARD_TYPE 11 // DIY Beetle 32u4 Leonardo receiver
+
 
 //### Module type selection (default = 433, only needed for modified HW)
 //#define RFMTYPE 868

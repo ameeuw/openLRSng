@@ -1,5 +1,6 @@
 #ifndef _HARDWARE_H_
 #define _HARDWARE_H_
+#endif
 
 // Generic definitions needed always
 
@@ -877,27 +878,27 @@ void buzzerOn(uint16_t freq)
 #define Green_LED_OFF  PORTC &= ~(1<<PORTC6);
 
 //## RFM22B Pinouts for Public Edition (M2)
-#define  nIRQ_1 (PINB & (1<<PINB7))==(1<<PINB7) //PB7
-#define  nIRQ_0 (PINB & (1<<PINB7))==0x00 //PB7
+#define  nIRQ_1 (PINB & (1<<PINB5))==(1<<PINB5) //PB7 --> D11
+#define  nIRQ_0 (PINB & (1<<PINB5))==0x00 //PB7
 
-#define  nSEL_on PORTD |= (1<<PORTD6) //PD6
-#define  nSEL_off PORTD &= ~(1<<PORTD6) //PD6
+#define  nSEL_on PORTB |= (1<<PORTB6) //PD6 --> D12
+#define  nSEL_off PORTB &= ~(1<<PORTB6) //PD6
 
-#define  SCK_on  PORTB |= (1<<PORTB1)  //PB1
+#define  SCK_on  PORTB |= (1<<PORTB1)  //PB1 --> SCK
 #define  SCK_off PORTB &= ~(1<<PORTB1) //PB1
 
-#define  SDI_on  PORTB |= (1<<PORTB2)  //PB2 MOSI
+#define  SDI_on  PORTB |= (1<<PORTB2)  //PB2 MOSI --> MOSI
 #define  SDI_off PORTB &= ~(1<<PORTB2) //PB2 MOSI
 
-#define  SDO_1 (PINB & (1<<PINB3)) == (1<<PINB3) //PB3 MISO
+#define  SDO_1 (PINB & (1<<PINB3)) == (1<<PINB3) //PB3 MISO --> MISO
 #define  SDO_0 (PINB & (1<<PINB3)) == 0x00  //PB3 MISO
 
 //can't do this, they are not D-pins on leonardo
-//#define SDO_pin x //PB3
-//#define SDI_pin x //PB2
-//#define SCLK_pin x //PB1
-#define IRQ_pin 11 //PB7
-#define nSel_pin 12
+//#define SDO_pin 14 //PB3
+//#define SDI_pin 16 //PB2
+//#define SCLK_pin 15 //PB1
+#define IRQ_pin 9 //PB7 -change to-> 9 PB5/PCINT5
+#define nSel_pin 10 // PD6 -change to-> 10 PB6
 
 
 void setupSPI()
@@ -911,7 +912,7 @@ void setupSPI()
 
 void setupRfmInterrupt()
 {
-  PCMSK0 |= (1<<PCINT7); //enable pin change interrupt
+  PCMSK0 |= (1<<PCINT5); //enable pin change interrupt
   PCICR |= (1<<PCIE0);
 }
 
@@ -1551,5 +1552,172 @@ void setupRfmInterrupt()
 {
   attachInterrupt(IRQ_interrupt, RFM22B_Int, FALLING);
 }
+
+#endif
+
+#if (BOARD_TYPE == 11) // DIY Beetle 32u4 Leonardo Rx/Tx
+#if (__AVR_ATmega32U4__ != 1)
+#error Wrong board selected, select Arduino Leonardo
+#endif
+
+// #if (COMPILE_TX != 1)
+// #error TX module cannot be used as RX
+// #endif
+
+#if (COMPILE_TX == 1)
+#undef CLI_ENABLED
+
+#define USE_CONSOLE_SERIAL
+Serial_ *consoleSerial = &Serial;
+
+HardwareSerial *rcSerial = &Serial1;
+
+#define USE_ICP1 // use ICP1 for PPM input for less jitter
+#define PPM_IN 4 // ICP1
+
+#define TX_AIN_IS_DIGITAL
+#define TX_AIN0 2 // SDA
+#define TX_AIN1 3 // SCL
+#define TX_MODE1 2
+#define TX_MODE2 3
+
+#define BUZZER_PAS 10 // OCR4B
+#define BTN A0
+#define Red_LED 6 //PD7
+#define Green_LED 5 //PC6
+
+void buzzerInit()
+{
+  TCCR4B = (1<<CS43); // prescaler = 128
+  pinMode(BUZZER_PAS, OUTPUT);
+  digitalWrite(BUZZER_PAS, LOW);
+}
+
+void buzzerOn(uint16_t freq)
+{
+  if (freq) {
+    uint32_t ocr = 125000L / freq;
+    if (ocr>255) {
+      ocr=255;
+    }
+    if (!ocr) {
+      ocr=1;
+    }
+    OCR4C = ocr;
+    TCCR4A |= (1<<COM4B0); // enable output
+  } else {
+    TCCR4A &= ~(1<<COM4B0); // disable output
+  }
+}
+
+#define buzzerOff(foo) buzzerOn(0)
+
+#else
+// Receiver operation
+#define PPM_OUT 9
+#define RSSI_OUT 5
+#define OUTPUTS 6 // Two outputs
+
+const pinMask_t OUTPUT_MASKS[OUTPUTS] = {
+  {0x02,0x00,0x00}, // PPM -> 9
+  {0x00,0x10,0x00}, // SDA -> A4
+  {0x00,0x20,0x00}, // SCL -> A5
+  {0x00,0x00,0x20}, // RSSI -> 5
+  {0x00,0x00,0x01}, // RXD -> 0
+  {0x00,0x00,0x02}, // TXD -> 1
+};
+
+const uint8_t OUTPUT_PIN[OUTPUTS] = { 9, A4, A5, 5, 0, 1};
+
+#define PPM_OUTPUT 0
+#define ANALOG0_OUTPUT 1
+#define ANALOG1_OUTPUT 2
+#define SDA_OUTPUT 1
+#define SCL_OUTPUT 2
+#define RSSI_OUTPUT 3
+#define RXD_OUTPUT 4
+#define TXD_OUTPUT 5
+
+struct rxSpecialPinMap rxSpecialPins[] = {
+  { 0, PINMAP_PPM},
+  { 1, PINMAP_SDA},
+  { 2, PINMAP_SCL},
+  { 3, PINMAP_RSSI},
+  { 4, PINMAP_RXD},
+  { 5, PINMAP_TXD},
+  { 5, PINMAP_SPKTRM},
+  { 5, PINMAP_SBUS},
+  { 5, PINMAP_SUMD},
+};
+
+void rxInitHWConfig()
+{
+  uint8_t i;
+  rx_config.rx_type = RX_PTOWER;
+  rx_config.pinMapping[0] = PINMAP_PPM;
+  rx_config.pinMapping[1] = PINMAP_SDA;
+  rx_config.pinMapping[2] = PINMAP_SCL;
+  rx_config.pinMapping[3] = PINMAP_RSSI;
+  rx_config.pinMapping[4] = PINMAP_RXD;
+  rx_config.pinMapping[5] = PINMAP_TXD;
+}
+#endif
+
+#define Red_LED 6
+#define Green_LED 5
+
+#define Red_LED_ON  PORTD |= (1<<PORTD7);
+#define Red_LED_OFF  PORTD &= ~(1<<PORTD7);
+
+#define Green_LED_ON   PORTC |= (1<<PORTC6);
+#define Green_LED_OFF  PORTC &= ~(1<<PORTC6);
+
+//## RFM22B Pinouts for Public Edition (M2)
+#define  nIRQ_1 (PINB & (1<<PINB5))==(1<<PINB5) //PB7 --> D11
+#define  nIRQ_0 (PINB & (1<<PINB5))==0x00 //PB7
+
+#define  nSEL_on PORTB |= (1<<PORTB6) //PD6 --> D12
+#define  nSEL_off PORTB &= ~(1<<PORTB6) //PD6
+
+#define  SCK_on  PORTB |= (1<<PORTB1)  //PB1 --> SCK
+#define  SCK_off PORTB &= ~(1<<PORTB1) //PB1
+
+#define  SDI_on  PORTB |= (1<<PORTB2)  //PB2 MOSI --> MOSI
+#define  SDI_off PORTB &= ~(1<<PORTB2) //PB2 MOSI
+
+#define  SDO_1 (PINB & (1<<PINB3)) == (1<<PINB3) //PB3 MISO --> MISO
+#define  SDO_0 (PINB & (1<<PINB3)) == 0x00  //PB3 MISO
+
+//can't do this, they are not D-pins on leonardo
+//#define SDO_pin 14 //PB3
+//#define SDI_pin 16 //PB2
+//#define SCLK_pin 15 //PB1
+#define IRQ_pin 9 //PB7 -change to-> 9 PB5/PCINT5
+#define nSel_pin 10 // PD6 -change to-> 10 PB6
+
+
+void setupSPI()
+{
+  DDRB |= (1<<DDB1); // SCK PB1 output
+  DDRB |= (1<<DDB2); // SDI/MOSI PB2 output
+  DDRB &= ~(1<<DDB3); // SDO/MISO PB3 input
+  pinMode(IRQ_pin, INPUT);   //IRQ
+  pinMode(nSel_pin, OUTPUT);   //nSEL
+}
+
+void setupRfmInterrupt()
+{
+  PCMSK0 |= (1<<PCINT5); //enable pin change interrupt
+  PCICR |= (1<<PCIE0);
+}
+
+ISR(PCINT0_vect)
+{
+  if(nIRQ_0) { //check if pin is low
+    RFM22B_Int();
+  }
+}
+
+#define SWAP_GPIOS
 
 #endif
