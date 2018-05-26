@@ -44,8 +44,8 @@
 
 //####### COMPILATION TARGET #######
 // Enable to compile transmitter code, default is RX
-#define COMPILE_TX 0 // compile RX code
-//#define COMPILE_TX 1 // compile TX code
+//#define COMPILE_TX 0 // compile RX code
+#define COMPILE_TX 1 // compile TX code
 
 //####### BOARD TYPE #######
 // Enable only one of the lines below
@@ -59,7 +59,7 @@
 //#define BOARD_TYPE 7 // PowerTowerRx
 //#define BOARD_TYPE 8 // openLRSng microRx
 //#define BOARD_TYPE 9 // BroversityRX
-#define BOARD_TYPE 10 // DIY mini receiver
+#define BOARD_TYPE 10 // DIY mini receiver and Sparkfun RFM22 Shield
 //#define BOARD_TYPE 11 // DIY Beetle 32u4 Leonardo receiver
 
 
